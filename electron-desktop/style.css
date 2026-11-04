@@ -1,0 +1,159 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  background: #0B0F19;
+  color: #F1F5F9;
+  overflow: hidden;
+  user-select: none;
+}
+
+#browser-chrome {
+  height: 126px;
+  background: #0F172A;
+  border-bottom: 1px solid #1E293B;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-strip {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+  background: #0B0F19;
+  border-bottom: 1px solid #1E293B;
+}
+
+.brand-badge {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #3B82F6;
+  padding: 4px 8px;
+}
+
+.tabs-container {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #111827;
+  border: 1px solid #1E293B;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 220px;
+}
+
+.tab-item.active {
+  background: #1E293B;
+  color: #F8FAFC;
+  border-color: #2563EB;
+}
+
+.nav-toolbar {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+}
+
+.address-form {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: #0B0F19;
+  border: 1px solid #1E293B;
+  border-radius: 8px;
+  padding: 0 8px;
+  height: 36px;
+}
+
+.address-form:focus-within {
+  border-color: #3B82F6;
+}
+
+#address-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #F8FAFC;
+  font-size: 13px;
+  padding: 0 8px;
+  outline: none;
+}
+
+.icon-btn, .tool-btn, .text-btn {
+  background: #1E293B;
+  color: #E2E8F0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.icon-btn:hover, .tool-btn:hover, .text-btn:hover {
+  background: #2563EB;
+  border-color: #3B82F6;
+  color: #FFFFFF;
+}
+
+.bookmarks-bar {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  background: #0F172A;
+  border-top: 1px solid #1E293B;
+  font-size: 12px;
+}
+
+.side-panel {
+  position: fixed;
+  top: 126px;
+  right: 0;
+  width: 380px;
+  height: calc(100vh - 126px);
+  background: #0F172A;
+  border-left: 1px solid #1E293B;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+.side-panel.hidden {
+  display: none;
+}
+
+.side-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #1E293B;
+}
+
+.side-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}

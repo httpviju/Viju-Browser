@@ -1,0 +1,6 @@
+{
+  "name": "Viju Browser",
+  "description": "A security-hardened custom Windows desktop browser built on Electron and Chromium featuring Auto Refresh Plus, Fingerprint Privacy Controls, Random User-Agent Switcher, WebRTC Shield, and Cache Manager.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "viju-browser",
+  "productName": "Viju Browser",
+  "version": "1.4.0",
+  "description": "Custom security-hardened Windows desktop browser built with Electron and Chromium",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "keywords": [
+    "browser",
+    "electron",
+    "chromium",
+    "privacy",
+    "webrtc-shield",
+    "auto-refresh"
+  ],
+  "author": "Viju Browser Engineering",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.vijubrowser.desktop",
+    "productName": "Viju Browser",
+    "directories": {
+      "output": "dist-installer"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "tab-preload.js",
+      "ipc-validators.js",
+      "renderer.js",
+      "index.html",
+      "style.css"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Viju-Browser-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Viju Browser"
+    }
+  }
+}

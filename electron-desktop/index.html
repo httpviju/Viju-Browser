@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Viju Browser</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="browser-chrome">
+    <div class="tab-strip">
+      <div class="brand-badge">VIJU</div>
+      <div id="tabs-container" class="tabs-container"></div>
+      <button id="btn-new-tab" class="icon-btn" title="New Tab">+</button>
+      <button id="btn-restore-tab" class="text-btn" title="Restore Closed Tab">Restore Tab</button>
+      <div id="privacy-status-pill" class="privacy-pill">WebRTC Shield: Active</div>
+    </div>
+
+    <div class="nav-toolbar">
+      <div class="nav-controls">
+        <button id="btn-back" class="icon-btn" title="Back">&#8592;</button>
+        <button id="btn-forward" class="icon-btn" title="Forward">&#8594;</button>
+        <button id="btn-reload" class="icon-btn" title="Reload">&#8635;</button>
+        <button id="btn-home" class="icon-btn" title="Home">&#8962;</button>
+      </div>
+
+      <form id="address-form" class="address-form">
+        <span class="protocol-badge">HTTPS / Search</span>
+        <input id="address-input" type="text" placeholder="Enter URL or search Google..." autocomplete="off" />
+        <button type="button" id="btn-bookmark" class="icon-btn" title="Bookmark Page">&#9734;</button>
+      </form>
+
+      <div class="tool-buttons">
+        <button data-panel="auto-refresh" class="tool-btn">Auto Refresh</button>
+        <button data-panel="user-agent" class="tool-btn">User-Agent</button>
+        <button data-panel="fingerprint" class="tool-btn">Fingerprint</button>
+        <button data-panel="webrtc" class="tool-btn">WebRTC</button>
+        <button data-panel="clear-cache" class="tool-btn">Clear Cache</button>
+        <button data-panel="downloads" class="tool-btn">Downloads</button>
+      </div>
+    </div>
+
+    <div id="bookmarks-bar" class="bookmarks-bar"></div>
+  </div>
+
+  <aside id="side-panel" class="side-panel hidden">
+    <div class="side-panel-header">
+      <h2 id="side-panel-title">Control Panel</h2>
+      <button id="btn-close-panel" class="icon-btn">&times;</button>
+    </div>
+    <div id="side-panel-body" class="side-panel-body"></div>
+  </aside>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
