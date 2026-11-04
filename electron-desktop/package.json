@@ -8,7 +8,8 @@
     "start": "electron .",
     "dev": "electron . --enable-logging",
     "pack": "electron-builder --dir",
-    "dist:win": "electron-builder --win --x64"
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "release:github": "electron-builder --win --x64 --publish always"
   },
   "keywords": [
     "browser",
@@ -30,6 +31,12 @@
     "directories": {
       "output": "dist-installer"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",
@@ -49,15 +56,18 @@
           "target": "portable",
           "arch": ["x64"]
         }
-      ],
-      "artifactName": "Viju-Browser-Setup-${version}-${arch}.${ext}"
+      ]
     },
     "nsis": {
+      "artifactName": "Viju-Browser-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Viju Browser"
+    },
+    "portable": {
+      "artifactName": "Viju-Browser-Portable-${version}-${arch}.${ext}"
     }
   }
 }

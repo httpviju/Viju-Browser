@@ -41,9 +41,13 @@ import {
 } from '../types/browser';
 import {
   ALL_FINGERPRINT_CONTROL_KEYS,
+  buildGitHubReleaseUrls,
   computePrivacyStatusSummary,
+  DEFAULT_GITHUB_RELEASE_REPO,
   formatSeedHex,
   resolveEffectiveUserAgentForUrl,
+  VIJU_INSTALLER_EXE_FILENAME,
+  VIJU_PORTABLE_EXE_FILENAME,
 } from '../utils/browserEngine';
 import { ElectronSourceWorkbench } from './ElectronSourceWorkbench';
 import { ClearBrowsingDataView } from './ClearBrowsingDataView';
@@ -214,14 +218,36 @@ export const BrowserViewport: React.FC<BrowserViewportProps> = ({
                     Custom Windows Desktop Browser & Privacy Workbench
                   </h1>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('viju://electron-source')}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors shrink-0 self-start"
-                >
-                  <Code2 className="w-4 h-4" />
-                  <span>Inspect Electron Source & .EXE Build Guide</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+                  <a
+                    href={
+                      buildGitHubReleaseUrls(DEFAULT_GITHUB_RELEASE_REPO)
+                        .installerExeDownloadUrl
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      const urls = buildGitHubReleaseUrls(DEFAULT_GITHUB_RELEASE_REPO);
+                      onTriggerDownload(
+                        VIJU_INSTALLER_EXE_FILENAME,
+                        urls.installerExeDownloadUrl,
+                        84_500_000
+                      );
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Direct Download .EXE (GitHub Releases)</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('viju://electron-source')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+                  >
+                    <Code2 className="w-4 h-4" />
+                    <span>GitHub Release Hub & Source</span>
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleHomeSearch} className="flex items-center gap-2">
@@ -729,11 +755,12 @@ export const BrowserViewport: React.FC<BrowserViewportProps> = ({
         {/* 5. ELECTRON SOURCE CODE & WINDOWS .EXE WORKBENCH (viju://electron-source) */}
         {activeTab.url === 'viju://electron-source' && (
           <ElectronSourceWorkbench
-            onTriggerInstallerDownload={() => {
+            onTriggerInstallerDownload={(filename, url, sizeBytes) => {
+              const defaultUrls = buildGitHubReleaseUrls(DEFAULT_GITHUB_RELEASE_REPO);
               onTriggerDownload(
-                'Viju-Browser-Setup-1.4.0-x64.exe',
-                'https://releases.vijubrowser.dev/win64/Viju-Browser-Setup-1.4.0-x64.exe',
-                84_500_000
+                filename || VIJU_INSTALLER_EXE_FILENAME,
+                url || defaultUrls.installerExeDownloadUrl,
+                sizeBytes || 84_500_000
               );
               onOpenPanel('downloads');
             }}

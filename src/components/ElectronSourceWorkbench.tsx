@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Code2,
   Copy,
   Check,
   Download,
@@ -9,28 +8,83 @@ import {
   Package,
   Wrench,
   FileCode,
-  Play,
+  ExternalLink,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { ELECTRON_SOURCE_FILES } from '../data/electronSourceFiles';
+import {
+  buildGitHubReleaseUrls,
+  DEFAULT_GITHUB_RELEASE_REPO,
+  VIJU_INSTALLER_EXE_FILENAME,
+  VIJU_PORTABLE_EXE_FILENAME,
+  VIJU_RELEASE_TAG,
+} from '../utils/browserEngine';
 
 interface ElectronSourceWorkbenchProps {
-  onTriggerInstallerDownload: () => void;
+  onTriggerInstallerDownload: (filename?: string, url?: string, sizeBytes?: number) => void;
 }
+
+interface LiveGitHubReleaseAsset {
+  name: string;
+  size: number;
+  browser_download_url: string;
+  download_count: number;
+}
+
+interface LiveReleaseCheckState {
+  status: 'idle' | 'checking' | 'found' | 'not_published_yet' | 'error';
+  tagName?: string;
+  publishedAt?: string;
+  htmlUrl?: string;
+  assets?: LiveGitHubReleaseAsset[];
+  message?: string;
+}
+
+const GITHUB_REPO_STORAGE_KEY = 'viju.githubReleaseRepo.v1';
 
 export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = ({
   onTriggerInstallerDownload,
 }) => {
-  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
+  const workflowFileIndex = Math.max(
+    0,
+    ELECTRON_SOURCE_FILES.findIndex((f) => f.filename === 'build-windows-exe.yml')
+  );
+
+  const [selectedFileIndex, setSelectedFileIndex] = useState(workflowFileIndex);
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
   const [activeGuideTab, setActiveGuideTab] = useState<
-    'code' | 'install-run' | 'build-exe' | 'troubleshooting'
-  >('code');
+    'github-release' | 'code' | 'install-run' | 'build-exe' | 'troubleshooting'
+  >('github-release');
 
+  const [repoInput, setRepoInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem(GITHUB_REPO_STORAGE_KEY) || DEFAULT_GITHUB_RELEASE_REPO;
+    } catch {
+      return DEFAULT_GITHUB_RELEASE_REPO;
+    }
+  });
+
+  const [liveReleaseState, setLiveReleaseState] = useState<LiveReleaseCheckState>({
+    status: 'idle',
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GITHUB_REPO_STORAGE_KEY, repoInput);
+    } catch {
+      // ignore storage errors
+    }
+  }, [repoInput]);
+
+  const releaseUrls = buildGitHubReleaseUrls(repoInput, VIJU_RELEASE_TAG);
   const currentFile = ELECTRON_SOURCE_FILES[selectedFileIndex] || ELECTRON_SOURCE_FILES[0];
 
-  const handleCopy = (filename: string, text: string) => {
+  const handleCopy = (key: string, text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
-    setCopiedFile(filename);
+    setCopiedFile(key);
     setTimeout(() => setCopiedFile(null), 2000);
   };
 
@@ -44,39 +98,328 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
     URL.revokeObjectURL(url);
   };
 
+  const handleCheckLiveGitHubRelease = async () => {
+    setLiveReleaseState({ status: 'checking' });
+    try {
+      const response = await fetch(releaseUrls.apiLatestReleaseUrl, {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (response.status === 404) {
+        setLiveReleaseState({
+          status: 'not_published_yet',
+          message: `Repository "${releaseUrls.normalizedRepo}" par abhi latest release publish nahi hua hai. Niche diye 3 steps follow karke code GitHub par push karein — GitHub Actions automatically .EXE build karke Releases tab me daal dega!`,
+        });
+        return;
+      }
+      if (!response.ok) {
+        setLiveReleaseState({
+          status: 'error',
+          message: `GitHub API returned HTTP ${response.status} for ${releaseUrls.normalizedRepo}.`,
+        });
+        return;
+      }
+      const data = await response.json();
+      const assets: LiveGitHubReleaseAsset[] = Array.isArray(data.assets)
+        ? data.assets.map((a: LiveGitHubReleaseAsset) => ({
+            name: a.name,
+            size: a.size,
+            browser_download_url: a.browser_download_url,
+            download_count: a.download_count,
+          }))
+        : [];
+      setLiveReleaseState({
+        status: 'found',
+        tagName: data.tag_name || VIJU_RELEASE_TAG,
+        publishedAt: data.published_at
+          ? new Date(data.published_at).toLocaleString()
+          : 'Just now',
+        htmlUrl: data.html_url || releaseUrls.releasesPageUrl,
+        assets,
+        message: `Live GitHub Release (${data.tag_name || VIJU_RELEASE_TAG}) found with ${assets.length} downloadable asset(s)!`,
+      });
+    } catch {
+      setLiveReleaseState({
+        status: 'error',
+        message:
+          'Could not reach api.github.com right now. Use the direct GitHub Releases .EXE links below.',
+      });
+    }
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Top Banner */}
-      <div className="p-5 rounded-xl bg-[#0F172A] border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="text-xs font-mono text-blue-400">
-            viju://electron-source · Windows x64 Desktop Deliverables
+      {/* Top Banner + Direct GitHub Releases .EXE Download Hub */}
+      <div className="p-5 rounded-xl bg-[#0F172A] border border-blue-500/40 space-y-5 shadow-lg">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-mono text-emerald-400">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>
+                GITHUB RELEASES DIRECT .EXE DOWNLOAD · AUTO-PUBLISH WORKFLOW READY
+              </span>
+            </div>
+            <h1 className="text-xl font-bold text-slate-100">
+              Viju Browser — Direct Windows <code className="text-blue-400">.EXE</code> Download
+              from GitHub Releases Tab
+            </h1>
+            <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+              Apna GitHub repository naam niche set karein aur sidha{' '}
+              <strong className="text-white">GitHub Releases Tab</strong> se{' '}
+              <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> (Full
+              Installer) ya{' '}
+              <code className="text-blue-300">{VIJU_PORTABLE_EXE_FILENAME}</code> (Portable
+              No-Install) direct download karein. Is project me{' '}
+              <code className="text-amber-300">.github/workflows/build-windows-exe.yml</code>{' '}
+              already configured hai jo har push par automatically Windows{' '}
+              <code className="text-emerald-300">.exe</code> build karke GitHub Releases tab me
+              publish kar deta hai.
+            </p>
           </div>
-          <h1 className="text-xl font-bold text-slate-100">
-            Viju Browser — Complete Electron Source Code & Windows .EXE Build Center
-          </h1>
-          <p className="text-xs text-slate-400 max-w-3xl">
-            Inspect, copy, or download every modular file for the standalone Electron 35 +
-            Chromium 134 Windows application, along with step-by-step commands to run locally
-            and package a signed/unsigned NSIS <code className="text-blue-300">.exe</code>{' '}
-            installer.
-          </p>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <a
+              href={releaseUrls.releasesPageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 text-xs font-semibold transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+              <span>Open GitHub Releases Tab</span>
+            </a>
+
+            <a
+              href={releaseUrls.actionsWorkflowUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 text-xs font-semibold transition-colors"
+            >
+              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Open GitHub Actions Build</span>
+            </a>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={onTriggerInstallerDownload}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            <span>Simulate .EXE Installer Download</span>
-          </button>
+        {/* Repository Selector & Direct .EXE Download Buttons */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
+          <div className="lg:col-span-5 space-y-1.5">
+            <label
+              htmlFor="github-release-repo-input"
+              className="block text-xs font-semibold text-slate-300"
+            >
+              GitHub Repository (<code className="text-blue-400">owner/repo</code> or full
+              GitHub URL):
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="github-release-repo-input"
+                type="text"
+                value={repoInput}
+                onChange={(e) => setRepoInput(e.target.value)}
+                placeholder="thakorvijay51098/viju-browser"
+                className="flex-1 bg-[#090D16] border border-slate-700 focus:border-blue-500 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleCheckLiveGitHubRelease}
+                disabled={liveReleaseState.status === 'checking'}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors shrink-0"
+                title="Check if latest .EXE release is live on this GitHub repository"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 text-blue-400 ${
+                    liveReleaseState.status === 'checking' ? 'animate-spin' : ''
+                  }`}
+                />
+                <span>Check Release</span>
+              </button>
+            </div>
+            <div className="text-[11px] font-mono text-slate-400 truncate">
+              Target Release URL:{' '}
+              <span className="text-blue-400">{releaseUrls.latestReleaseUrl}</span>
+            </div>
+          </div>
+
+          {/* Direct Download Buttons */}
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Button 1: Direct NSIS Setup .EXE */}
+            <div className="p-3 rounded-lg bg-[#090D16] border border-emerald-500/40 flex flex-col justify-between gap-2.5">
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400">
+                    WINDOWS x64 NSIS INSTALLER (.EXE)
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+                    Recommended
+                  </span>
+                </div>
+                <div className="text-xs font-mono font-bold text-slate-100 mt-1 truncate">
+                  {VIJU_INSTALLER_EXE_FILENAME}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Direct from <code className="text-slate-300">/releases/latest/download/</code>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={releaseUrls.installerExeDownloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() =>
+                    onTriggerInstallerDownload(
+                      VIJU_INSTALLER_EXE_FILENAME,
+                      releaseUrls.installerExeDownloadUrl,
+                      84_500_000
+                    )
+                  }
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Direct Download Setup .EXE</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleCopy('installer-url', releaseUrls.installerExeDownloadUrl)
+                  }
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  title="Copy direct Setup .EXE GitHub Release link"
+                >
+                  {copiedFile === 'installer-url' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Button 2: Direct Portable .EXE */}
+            <div className="p-3 rounded-lg bg-[#090D16] border border-blue-500/40 flex flex-col justify-between gap-2.5">
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono font-semibold text-blue-400">
+                    PORTABLE STANDALONE (.EXE)
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-500/30">
+                    No Install Needed
+                  </span>
+                </div>
+                <div className="text-xs font-mono font-bold text-slate-100 mt-1 truncate">
+                  {VIJU_PORTABLE_EXE_FILENAME}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Direct from <code className="text-slate-300">/releases/latest/download/</code>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={releaseUrls.portableExeDownloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() =>
+                    onTriggerInstallerDownload(
+                      VIJU_PORTABLE_EXE_FILENAME,
+                      releaseUrls.portableExeDownloadUrl,
+                      79_200_000
+                    )
+                  }
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Direct Download Portable .EXE</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopy('portable-url', releaseUrls.portableExeDownloadUrl)}
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  title="Copy direct Portable .EXE GitHub Release link"
+                >
+                  {copiedFile === 'portable-url' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Live GitHub Release Check Banner */}
+        {liveReleaseState.status !== 'idle' && (
+          <div
+            className={`p-3.5 rounded-lg border text-xs flex flex-col gap-2 ${
+              liveReleaseState.status === 'found'
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                : liveReleaseState.status === 'not_published_yet'
+                ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                : 'bg-slate-900 border-slate-700 text-slate-300'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-semibold">
+                {liveReleaseState.status === 'found' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                )}
+                <span>
+                  {liveReleaseState.status === 'checking'
+                    ? `Checking https://api.github.com/repos/${releaseUrls.normalizedRepo}/releases/latest...`
+                    : liveReleaseState.message}
+                </span>
+              </div>
+              {liveReleaseState.htmlUrl && (
+                <a
+                  href={liveReleaseState.htmlUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-mono text-emerald-300 hover:text-white shrink-0"
+                >
+                  View Release Page
+                </a>
+              )}
+            </div>
+
+            {liveReleaseState.assets && liveReleaseState.assets.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {liveReleaseState.assets.map((asset) => (
+                  <a
+                    key={asset.name}
+                    href={asset.browser_download_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-semibold"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>
+                      {asset.name} ({(asset.size / (1024 * 1024)).toFixed(1)} MB)
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-3 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveGuideTab('github-release')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+            activeGuideTab === 'github-release'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-[#0F172A] text-slate-300 border border-slate-800 hover:bg-slate-800'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>1. GitHub Releases Direct .EXE Setup (Auto-Build)</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveGuideTab('code')}
@@ -87,7 +430,7 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
           }`}
         >
           <FileCode className="w-4 h-4" />
-          <span>1. Complete Source Files ({ELECTRON_SOURCE_FILES.length} Files)</span>
+          <span>2. Complete Source & Workflow Files ({ELECTRON_SOURCE_FILES.length} Files)</span>
         </button>
 
         <button
@@ -100,7 +443,7 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
           }`}
         >
           <Terminal className="w-4 h-4" />
-          <span>2. Windows Installation & Run Locally</span>
+          <span>3. Windows Installation & Run Locally</span>
         </button>
 
         <button
@@ -113,7 +456,7 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
           }`}
         >
           <Package className="w-4 h-4" />
-          <span>3. Build Windows Installer (.EXE)</span>
+          <span>4. Build Windows .EXE Locally</span>
         </button>
 
         <button
@@ -126,17 +469,155 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
           }`}
         >
           <Wrench className="w-4 h-4" />
-          <span>4. Troubleshooting Common Errors</span>
+          <span>5. Troubleshooting Common Errors</span>
         </button>
       </div>
 
-      {/* Tab 1: Complete Source Files */}
+      {/* Tab 1: GitHub Releases Direct .EXE Setup */}
+      {activeGuideTab === 'github-release' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div className="lg:col-span-7 p-5 rounded-xl bg-[#0F172A] border border-slate-800 space-y-4">
+            <h2 className="text-base font-bold text-slate-100">
+              GitHub Releases Tab Se Direct <code className="text-emerald-400">.EXE</code> Kaise
+              Download Karein (3 Simple Steps)
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Humne aapke project me{' '}
+              <code className="text-blue-300">.github/workflows/build-windows-exe.yml</code> aur{' '}
+              <code className="text-blue-300">electron-desktop/package.json</code> set kar diya
+              hai. Ab aapko apne PC par manually build karne ki bhi zaroorat nahi hai — GitHub
+              khud Windows server (<code className="text-emerald-300">windows-latest</code>) par{' '}
+              <code className="text-emerald-300">.exe</code> banakar aapke{' '}
+              <strong className="text-white">Releases</strong> tab me daal dega:
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 space-y-1.5">
+                <div className="font-bold text-emerald-400">
+                  Step 1: Project ko apne GitHub Repo ({releaseUrls.normalizedRepo}) par Push /
+                  Sync karein
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  AI Studio ke top bar se <strong>Export to GitHub</strong> karein ya terminal se
+                  code apne GitHub repository ke <code className="text-blue-300">main</code>{' '}
+                  branch par push karein:
+                </p>
+                <pre className="p-2.5 rounded bg-[#0B0F19] border border-slate-800 font-mono text-[11px] text-blue-300 overflow-x-auto">
+                  {`git init
+git add .
+git commit -m "Build Viju Browser Windows EXE to GitHub Releases"
+git branch -M main
+git remote add origin https://github.com/${releaseUrls.normalizedRepo}.git
+git push -u origin main`}
+                </pre>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 space-y-1.5">
+                <div className="font-bold text-blue-400">
+                  Step 2: GitHub Actions Automatically Windows .EXE Compile & Publish Karega
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Jaise hi code push hoga,{' '}
+                  <code className="text-blue-300">.github/workflows/build-windows-exe.yml</code>{' '}
+                  chalu ho jayega (lagbhag 2–3 minute). Yeh workflow{' '}
+                  <code className="text-emerald-300">softprops/action-gh-release@v2</code> aur{' '}
+                  <code className="text-emerald-300">permissions: contents: write</code> use
+                  karke seedha aapke repo ke <strong>Releases</strong> tab me tag{' '}
+                  <code className="text-amber-300">v1.4.0</code> create kar dega.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 space-y-1.5">
+                <div className="font-bold text-amber-400">
+                  Step 3: Releases Tab Kholkar Direct .EXE Download Karein!
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Apne GitHub repo ke right-side{' '}
+                  <strong className="text-white">Releases</strong> section (ya upar diye{' '}
+                  <strong className="text-emerald-300">Direct Download Setup .EXE</strong>{' '}
+                  button) par click karein — wahan{' '}
+                  <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> aur{' '}
+                  <code className="text-blue-300">{VIJU_PORTABLE_EXE_FILENAME}</code> dono
+                  direct one-click download ke liye milenge!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 p-5 rounded-xl bg-[#0F172A] border border-slate-800 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-100">
+                  Direct GitHub Release URLs (Copy & Share)
+                </h3>
+                <span className="text-[11px] font-mono text-emerald-400">Tag: {VIJU_RELEASE_TAG}</span>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="p-3 rounded-lg bg-[#090D16] border border-slate-800 space-y-1">
+                  <div className="text-slate-400 font-medium">
+                    1. GitHub Releases Tab Page:
+                  </div>
+                  <div className="font-mono text-[11px] text-blue-300 break-all">
+                    {releaseUrls.releasesPageUrl}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-[#090D16] border border-slate-800 space-y-1">
+                  <div className="text-slate-400 font-medium">
+                    2. Direct NSIS Setup Installer (.EXE) URL:
+                  </div>
+                  <div className="font-mono text-[11px] text-emerald-300 break-all">
+                    {releaseUrls.installerExeDownloadUrl}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-[#090D16] border border-slate-800 space-y-1">
+                  <div className="text-slate-400 font-medium">
+                    3. Direct Portable Executable (.EXE) URL:
+                  </div>
+                  <div className="font-mono text-[11px] text-blue-300 break-all">
+                    {releaseUrls.portableExeDownloadUrl}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedFileIndex(workflowFileIndex);
+                  setActiveGuideTab('code');
+                }}
+                className="w-full py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                <FileCode className="w-4 h-4" />
+                <span>Inspect .github/workflows/build-windows-exe.yml</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const wf = ELECTRON_SOURCE_FILES[workflowFileIndex];
+                  if (wf) handleDownloadSingleFile(wf.filename, wf.content);
+                }}
+                className="w-full py-2 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download build-windows-exe.yml File</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Complete Source Files */}
       {activeGuideTab === 'code' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* File List Sidebar */}
           <div className="lg:col-span-4 space-y-2">
             <div className="text-xs font-semibold text-slate-400 px-1">
-              Project Directory: viju-browser-win32/
+              Project Directory: electron-desktop/ & .github/workflows/
             </div>
             {ELECTRON_SOURCE_FILES.map((file, idx) => (
               <button
@@ -223,7 +704,7 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
         </div>
       )}
 
-      {/* Tab 2: Windows Installation & Local Run */}
+      {/* Tab 3: Windows Installation & Local Run */}
       {activeGuideTab === 'install-run' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="p-5 rounded-xl bg-[#0F172A] border border-slate-800 space-y-4">
@@ -254,18 +735,11 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
               02. Commands to Run Viju Browser Locally
             </h2>
             <p className="text-xs text-slate-300">
-              Place all 8 files (<code className="text-blue-300">package.json</code>,{' '}
-              <code className="text-blue-300">main.js</code>,{' '}
-              <code className="text-blue-300">preload.js</code>,{' '}
-              <code className="text-blue-300">tab-preload.js</code>,{' '}
-              <code className="text-blue-300">ipc-validators.js</code>,{' '}
-              <code className="text-blue-300">renderer.js</code>,{' '}
-              <code className="text-blue-300">index.html</code>,{' '}
-              <code className="text-blue-300">style.css</code>) inside a folder named{' '}
-              <code className="text-blue-300">viju-browser-win32</code> and execute:
+              Open PowerShell inside <code className="text-blue-300">electron-desktop/</code>{' '}
+              and execute:
             </p>
             <pre className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 font-mono text-xs text-emerald-300 overflow-x-auto">
-              {`cd viju-browser-win32
+              {`cd electron-desktop
 npm install
 npm start`}
             </pre>
@@ -275,20 +749,11 @@ npm start`}
             <pre className="p-3 rounded-lg bg-[#090D16] border border-slate-800 font-mono text-xs text-blue-300">
               {`npm run dev`}
             </pre>
-            <p className="text-xs text-slate-400 pt-1">
-              To run the automated 19-test verification suite (verifying Get New Agent,
-              startup/interval rotation, pause/resume, 14 Browser/OS generator toggles,
-              exact/subdomain Blacklist matching, 12-Surface Fingerprint Spoofing, and Clear
-              Browsing Data):
-            </p>
-            <pre className="p-3 rounded-lg bg-[#090D16] border border-slate-800 font-mono text-xs text-emerald-300">
-              {`npx tsx --test src/utils/browserEngine.test.ts`}
-            </pre>
           </div>
         </div>
       )}
 
-      {/* Tab 3: Build Windows Installer (.EXE) */}
+      {/* Tab 4: Build Windows Installer (.EXE) */}
       {activeGuideTab === 'build-exe' && (
         <div className="p-5 rounded-xl bg-[#0F172A] border border-slate-800 space-y-4">
           <h2 className="text-base font-bold text-slate-100">
@@ -296,40 +761,44 @@ npm start`}
           </h2>
           <p className="text-xs text-slate-300 leading-relaxed">
             The project uses <code className="text-blue-300">electron-builder</code> configured
-            in <code className="text-blue-300">package.json</code> to produce both a full
-            multi-step Windows NSIS Setup Wizard (<code className="text-blue-300">.exe</code>)
-            with Desktop/Start Menu shortcuts and a standalone Portable executable.
+            in <code className="text-blue-300">electron-desktop/package.json</code> to produce
+            both a full Windows NSIS Setup Wizard (
+            <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code>) and a
+            standalone Portable executable (
+            <code className="text-blue-300">{VIJU_PORTABLE_EXE_FILENAME}</code>).
           </p>
           <pre className="p-4 rounded-lg bg-[#090D16] border border-slate-800 font-mono text-xs text-emerald-300 overflow-x-auto">
-            {`# 1. Install dependencies (Electron 35 + electron-builder 26)
+            {`cd electron-desktop
+
+# 1. Install dependencies (Electron 35 + electron-builder 26)
 npm install
 
-# 2. Test unpackaged directory bundle first (fast verification)
-npm run pack
+# 2. Build both NSIS Setup .EXE and Portable .EXE locally
+npm run dist:win
 
-# 3. Build production Windows x64 Installer (.exe)
-npm run dist:win`}
+# 3. Or publish directly to GitHub Releases from CLI (requires GH_TOKEN)
+npm run release:github`}
           </pre>
           <div className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 text-xs space-y-1.5">
             <div className="font-semibold text-slate-200">Generated Output Artifacts:</div>
-            <div className="font-mono text-blue-400">
-              dist-installer/Viju-Browser-Setup-1.4.0-x64.exe (NSIS Installer)
+            <div className="font-mono text-emerald-400">
+              dist-installer/{VIJU_INSTALLER_EXE_FILENAME} (NSIS Setup Installer)
             </div>
-            <div className="font-mono text-slate-400">
-              dist-installer/win-unpacked/Viju Browser.exe (Unpacked Application Binary)
+            <div className="font-mono text-blue-400">
+              dist-installer/{VIJU_PORTABLE_EXE_FILENAME} (Standalone Portable .EXE)
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 4: Troubleshooting */}
+      {/* Tab 5: Troubleshooting */}
       {activeGuideTab === 'troubleshooting' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
             {
-              title: '1. Electron binary download stalls during npm install',
-              cause: 'Corporate firewall or slow mirror blocking GitHub releases download.',
-              fix: 'Set ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" in PowerShell before running npm install, or clear cache with npm cache clean --force.',
+              title: '1. GitHub Actions workflow fails with 403 Resource not accessible by integration',
+              cause: 'Default GITHUB_TOKEN in repository settings has Read-only permissions.',
+              fix: 'Our .github/workflows/build-windows-exe.yml explicitly sets "permissions: contents: write" at the workflow level. You can also verify in GitHub Repo -> Settings -> Actions -> General -> Workflow permissions -> Read and write permissions.',
             },
             {
               title: '2. Symbolic link privilege error during electron-builder on Windows',
@@ -339,12 +808,12 @@ npm run dist:win`}
             {
               title: '3. WebContentsView bounds overlap the right-hand side panel',
               cause: 'In Electron, WebContentsView is a native Chromium compositor layer rendered above HTML DOM elements.',
-              fix: 'main.js automatically insets the active WebContentsView width by 380px via viju:set-side-panel-open IPC whenever a side panel opens.',
+              fix: 'main.js automatically insets the active WebContentsView width by 420px via viju:set-side-panel-open IPC whenever a side panel opens.',
             },
             {
               title: '4. Video conferencing (Meet / Zoom / Teams) fails to connect audio/video',
-              cause: 'WebRTC Control is toggled Off or WebRTC Shield is set to disable_non_proxied_udp without an active TURN/TCP server.',
-              fix: 'Open the WebRTC panel in Viju Browser, enable WebRTC Master Control, and select default_public_interface_only.',
+              cause: 'WebRTC Shield blocks non-proxied UDP on untrusted domains.',
+              fix: 'Add the domain in the WebRTC Shield Whitelist (meet.google.com, zoom.us, and teams.microsoft.com are whitelisted and enabled by default).',
             },
           ].map((item, idx) => (
             <div

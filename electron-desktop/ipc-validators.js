@@ -229,14 +229,14 @@ function validateWebRTCConfig(config) {
   const enabled = config.enabled !== false;
   const shieldEnabled = config.shieldEnabled !== false;
   const blockLocalIp = config.blockLocalIp !== false;
-  const blockPublicIp = Boolean(config.blockPublicIp);
-  const blockUdp = Boolean(config.blockUdp);
-  const forceProxy = Boolean(config.forceProxy);
+  const blockPublicIp = config.blockPublicIp !== false;
+  const blockUdp = config.blockUdp !== false;
+  const forceProxy = config.forceProxy !== false;
   const leakDetectionEnabled = config.leakDetectionEnabled !== false;
 
   let policy = ALLOWED_WEBRTC_POLICIES.has(config.policy)
     ? config.policy
-    : 'default_public_interface_only';
+    : 'disable_non_proxied_udp';
   if (!enabled) {
     policy = 'disable_non_proxied_udp';
   } else if (shieldEnabled) {

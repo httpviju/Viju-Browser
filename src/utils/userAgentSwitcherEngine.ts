@@ -400,7 +400,7 @@ export function createDefaultRandomUASwitcherConfig(
   const baseConfig: RandomUASwitcherConfig = {
     enabledGlobally: true,
     paused: false,
-    autoRotateEnabled: false,
+    autoRotateEnabled: true,
     autoRotateIntervalSeconds: 60,
     remainingSeconds: 60,
     rotateOnStartup: true,

@@ -639,3 +639,73 @@ export function computePrivacyStatusSummary(
     unmodifiedSignals,
   };
 }
+
+export const DEFAULT_GITHUB_RELEASE_REPO = 'thakorvijay51098/viju-browser';
+export const VIJU_RELEASE_VERSION = '1.4.0';
+export const VIJU_RELEASE_TAG = 'v1.4.0';
+export const VIJU_INSTALLER_EXE_FILENAME = 'Viju-Browser-Setup-1.4.0-x64.exe';
+export const VIJU_PORTABLE_EXE_FILENAME = 'Viju-Browser-Portable-1.4.0-x64.exe';
+
+export interface GitHubReleaseBundleUrls {
+  isValid: boolean;
+  normalizedRepo: string;
+  owner: string;
+  repo: string;
+  tag: string;
+  installerFilename: string;
+  portableFilename: string;
+  releasesPageUrl: string;
+  latestReleaseUrl: string;
+  tagReleaseUrl: string;
+  installerExeDownloadUrl: string;
+  portableExeDownloadUrl: string;
+  tagInstallerExeDownloadUrl: string;
+  tagPortableExeDownloadUrl: string;
+  actionsWorkflowUrl: string;
+  apiLatestReleaseUrl: string;
+}
+
+export function buildGitHubReleaseUrls(
+  rawRepoInput: string,
+  tag: string = VIJU_RELEASE_TAG
+): GitHubReleaseBundleUrls {
+  const cleaned = String(rawRepoInput || '')
+    .trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/releases.*$/i, '')
+    .replace(/^\/+|\/+$/g, '');
+
+  const parts = cleaned.split('/').filter(Boolean);
+  const isValid =
+    parts.length >= 2 &&
+    /^[a-zA-Z0-9._-]+$/.test(parts[0]) &&
+    /^[a-zA-Z0-9._-]+$/.test(parts[1]);
+
+  const owner = isValid ? parts[0] : 'thakorvijay51098';
+  const repo = isValid ? parts[1] : 'viju-browser';
+  const normalizedRepo = `${owner}/${repo}`;
+  const cleanTag = tag.trim() || VIJU_RELEASE_TAG;
+
+  const baseRepoUrl = `https://github.com/${normalizedRepo}`;
+
+  return {
+    isValid,
+    normalizedRepo,
+    owner,
+    repo,
+    tag: cleanTag,
+    installerFilename: VIJU_INSTALLER_EXE_FILENAME,
+    portableFilename: VIJU_PORTABLE_EXE_FILENAME,
+    releasesPageUrl: `${baseRepoUrl}/releases`,
+    latestReleaseUrl: `${baseRepoUrl}/releases/latest`,
+    tagReleaseUrl: `${baseRepoUrl}/releases/tag/${cleanTag}`,
+    installerExeDownloadUrl: `${baseRepoUrl}/releases/latest/download/${VIJU_INSTALLER_EXE_FILENAME}`,
+    portableExeDownloadUrl: `${baseRepoUrl}/releases/latest/download/${VIJU_PORTABLE_EXE_FILENAME}`,
+    tagInstallerExeDownloadUrl: `${baseRepoUrl}/releases/download/${cleanTag}/${VIJU_INSTALLER_EXE_FILENAME}`,
+    tagPortableExeDownloadUrl: `${baseRepoUrl}/releases/download/${cleanTag}/${VIJU_PORTABLE_EXE_FILENAME}`,
+    actionsWorkflowUrl: `${baseRepoUrl}/actions`,
+    apiLatestReleaseUrl: `https://api.github.com/repos/${normalizedRepo}/releases/latest`,
+  };
+}
+

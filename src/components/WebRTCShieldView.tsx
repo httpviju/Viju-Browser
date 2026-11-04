@@ -228,12 +228,12 @@ export const WebRTCShieldView: React.FC<WebRTCShieldViewProps> = ({
   const handleResetDefaults = () => {
     const def = normalizeWebRTCConfig({
       enabled: true,
-      policy: 'default_public_interface_only',
+      policy: 'disable_non_proxied_udp',
       shieldEnabled: true,
       blockLocalIp: true,
-      blockPublicIp: false,
-      blockUdp: false,
-      forceProxy: false,
+      blockPublicIp: true,
+      blockUdp: true,
+      forceProxy: true,
       leakDetectionEnabled: true,
       lastLeakTest: createUntestedWebRTCLeakResult(),
     });

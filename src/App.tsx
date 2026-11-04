@@ -55,7 +55,7 @@ import { NavigationToolbar } from './components/NavigationToolbar';
 import { BrowserViewport } from './components/BrowserViewport';
 import { SidePanelDrawer } from './components/SidePanelDrawer';
 
-const STORAGE_KEY = 'viju_browser_persistent_session_v3';
+const STORAGE_KEY = 'viju_browser_persistent_session_v4';
 
 const INITIAL_BOOKMARKS: BookmarkItem[] = [
   {

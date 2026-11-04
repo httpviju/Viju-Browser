@@ -25,8 +25,8 @@ export const DEFAULT_WEBRTC_WHITELIST_RULES: WebRTCWhitelistRule[] = [
   {
     id: 'wrtc-wl-3',
     domain: 'teams.microsoft.com',
-    enabled: false,
-    note: 'Optional Microsoft Teams WebRTC exception (disabled by default).',
+    enabled: true,
+    note: 'Trusted Microsoft Teams WebRTC video & voice call exception.',
     addedAt: '2026-11-03',
   },
 ];
@@ -79,7 +79,7 @@ export function syncPolicyFromShieldFlags(flags: {
 
 /**
  * Normalizes a partial or legacy WebRTCConfig into a complete, coherent WebRTCConfig
- * with all 7 WebRTC Shield controls, leak test state, and local logs.
+ * with all 7 WebRTC Shield controls ON by default, leak test state, and local logs.
  */
 export function normalizeWebRTCConfig(
   raw?: Partial<WebRTCConfig>
@@ -88,28 +88,19 @@ export function normalizeWebRTCConfig(
   const shieldEnabled =
     raw?.shieldEnabled !== undefined ? Boolean(raw.shieldEnabled) : true;
 
-  const rawPolicy: WebRTCPolicy = raw?.policy || 'default_public_interface_only';
+  const rawPolicy: WebRTCPolicy = raw?.policy || 'disable_non_proxied_udp';
 
   const blockLocalIp =
-    raw?.blockLocalIp !== undefined
-      ? Boolean(raw.blockLocalIp)
-      : rawPolicy === 'default_public_interface_only' ||
-        rawPolicy === 'disable_non_proxied_udp';
+    raw?.blockLocalIp !== undefined ? Boolean(raw.blockLocalIp) : true;
 
   const blockPublicIp =
-    raw?.blockPublicIp !== undefined
-      ? Boolean(raw.blockPublicIp)
-      : rawPolicy === 'disable_non_proxied_udp';
+    raw?.blockPublicIp !== undefined ? Boolean(raw.blockPublicIp) : true;
 
   const blockUdp =
-    raw?.blockUdp !== undefined
-      ? Boolean(raw.blockUdp)
-      : rawPolicy === 'disable_non_proxied_udp';
+    raw?.blockUdp !== undefined ? Boolean(raw.blockUdp) : true;
 
   const forceProxy =
-    raw?.forceProxy !== undefined
-      ? Boolean(raw.forceProxy)
-      : rawPolicy === 'disable_non_proxied_udp';
+    raw?.forceProxy !== undefined ? Boolean(raw.forceProxy) : true;
 
   const leakDetectionEnabled =
     raw?.leakDetectionEnabled !== undefined ? Boolean(raw.leakDetectionEnabled) : true;
@@ -140,10 +131,11 @@ export function normalizeWebRTCConfig(
           timestamp: new Date().toLocaleTimeString(),
           timestampMs: Date.now() - 30_000,
           origin: 'browser-session',
-          eventType: 'local_ip_blocked',
+          eventType: 'udp_blocked',
           action: 'blocked',
-          summary: 'WebRTC Shield initialized (Local RFC1918 IP Protection Active)',
-          detail: `Chromium IP policy set to "${policy}". Private LAN host candidates (192.168.x.x / 10.x.x.x) are stripped.`,
+          summary:
+            'WebRTC Shield initialized (All 7 Shield Protections ON — Maximum Protection)',
+          detail: `Chromium IP policy set to "${policy}". Local RFC1918 IPs, public STUN IPs, non-proxied UDP, and proxy bypass are all restricted.`,
         },
       ];
 

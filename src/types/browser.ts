@@ -399,7 +399,7 @@ export type ActiveSidePanel =
 export interface ElectronSourceFile {
   filename: string;
   path: string;
-  language: 'json' | 'javascript' | 'html' | 'css' | 'markdown';
+  language: 'json' | 'javascript' | 'html' | 'css' | 'markdown' | 'yaml';
   description: string;
   securityNotes: string[];
   content: string;

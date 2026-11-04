@@ -49,6 +49,10 @@ import {
   runWebRTCLeakDetectionAudit,
   isDomainWhitelistedForWebRTC,
   syncPolicyFromShieldFlags,
+  buildGitHubReleaseUrls,
+  DEFAULT_GITHUB_RELEASE_REPO,
+  VIJU_INSTALLER_EXE_FILENAME,
+  VIJU_PORTABLE_EXE_FILENAME,
 } from './browserEngine';
 
 test('resolveAddressBarInput handles internal viju:// protocol URLs', () => {
@@ -494,12 +498,20 @@ test('Blacklist exact-domain and subdomain matching and per-domain popup toggle 
   );
 });
 
-test('WebRTC Shield initializes with untested leak status and synchronizes with WebRTC Control policy', () => {
+test('WebRTC Shield initializes with all options ON, untested leak status, and synchronizes with WebRTC Control policy', () => {
   const defaultShield = normalizeWebRTCConfig();
   assert.equal(defaultShield.enabled, true);
   assert.equal(defaultShield.shieldEnabled, true);
   assert.equal(defaultShield.blockLocalIp, true);
+  assert.equal(defaultShield.blockPublicIp, true);
+  assert.equal(defaultShield.blockUdp, true);
+  assert.equal(defaultShield.forceProxy, true);
   assert.equal(defaultShield.leakDetectionEnabled, true);
+  assert.equal(defaultShield.policy, 'disable_non_proxied_udp');
+  assert.ok(
+    defaultShield.whitelistDomains.every((r) => r.enabled === true),
+    'All default WebRTC whitelist rules should be enabled by default'
+  );
   // Must NOT claim a leak test passed before a test is actually run
   assert.equal(defaultShield.lastLeakTest.status, 'not_tested');
   assert.equal(defaultShield.lastLeakTest.testedAt, null);
@@ -619,4 +631,34 @@ test('WebRTC Shield respects trusted website Whitelist rules and verifies video-
   );
   assert.equal(wlAudit.result.status, 'whitelisted_trusted');
 });
+
+test('buildGitHubReleaseUrls constructs direct GitHub Releases .EXE download links and normalizes repo URLs', () => {
+  const defaultUrls = buildGitHubReleaseUrls(DEFAULT_GITHUB_RELEASE_REPO);
+  assert.equal(defaultUrls.isValid, true);
+  assert.equal(defaultUrls.normalizedRepo, 'thakorvijay51098/viju-browser');
+  assert.equal(
+    defaultUrls.releasesPageUrl,
+    'https://github.com/thakorvijay51098/viju-browser/releases'
+  );
+  assert.equal(
+    defaultUrls.installerExeDownloadUrl,
+    `https://github.com/thakorvijay51098/viju-browser/releases/latest/download/${VIJU_INSTALLER_EXE_FILENAME}`
+  );
+  assert.equal(
+    defaultUrls.portableExeDownloadUrl,
+    `https://github.com/thakorvijay51098/viju-browser/releases/latest/download/${VIJU_PORTABLE_EXE_FILENAME}`
+  );
+
+  // Full GitHub URL with /releases or .git suffix normalizes cleanly
+  const fromFullUrl = buildGitHubReleaseUrls(
+    'https://github.com/customuser/viju-desktop-browser.git'
+  );
+  assert.equal(fromFullUrl.isValid, true);
+  assert.equal(fromFullUrl.normalizedRepo, 'customuser/viju-desktop-browser');
+  assert.equal(
+    fromFullUrl.installerExeDownloadUrl,
+    `https://github.com/customuser/viju-desktop-browser/releases/latest/download/${VIJU_INSTALLER_EXE_FILENAME}`
+  );
+});
+
 
