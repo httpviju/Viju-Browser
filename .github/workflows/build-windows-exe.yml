@@ -35,7 +35,10 @@ jobs:
         working-directory: electron-desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --win --x64 --publish never
+          GITHUB_REPOSITORY_SLUG: ${{ github.repository }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const repo=process.env.GITHUB_REPOSITORY_SLUG||'thakorvijay51098/Viju-Browser';p.repository={type:'git',url:'https://github.com/'+repo+'.git'};if(p.build){p.build.publish=null;}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          npx electron-builder --win --x64 --publish never -c.publish=null
 
       - name: 5. Upload .EXE Build Artifacts to Workflow Summary
         uses: actions/upload-artifact@v4

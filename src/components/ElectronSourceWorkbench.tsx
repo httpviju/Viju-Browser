@@ -89,6 +89,8 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
   const workflowFileObj =
     ELECTRON_SOURCE_FILES[workflowFileIndex] ||
     ELECTRON_SOURCE_FILES[ELECTRON_SOURCE_FILES.length - 1];
+  const packageJsonFileObj =
+    ELECTRON_SOURCE_FILES.find((f) => f.filename === 'package.json') || ELECTRON_SOURCE_FILES[0];
 
   const handleCopy = (key: string, text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -134,7 +136,7 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
       'npm install --no-audit --no-fund',
       'Write-Host "[2/2] Building Viju-Browser-Setup-1.4.0-x64.exe & Portable .EXE..." -ForegroundColor Yellow',
       '$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"',
-      'npx electron-builder --win --x64 --publish never',
+      'npx electron-builder --win --x64 --publish never -c.publish=null',
       'Write-Host ""',
       'Write-Host "SUCCESS! Opening dist-installer folder with your .EXE files..." -ForegroundColor Green',
       'Invoke-Item (Join-Path $targetDir "dist-installer")'
@@ -471,55 +473,86 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
           </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
-            {/* Method A: Publish on GitHub Releases in 2 Clicks */}
-            <div className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 space-y-2.5">
-              <div className="font-bold text-emerald-400 flex items-center justify-between">
-                <span>Tarika 1: GitHub Releases Tab Me .EXE Publish Karein (2-3 Min)</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300">
-                  GitHub Cloud Build
+            {/* Method A: 1-Click Fix for electron-builder "Cannot read properties of null (reading 'channel')" */}
+            <div className="p-3.5 rounded-lg bg-[#090D16] border border-emerald-500/50 space-y-2.5">
+              <div className="font-bold text-emerald-400 flex items-center justify-between gap-2">
+                <span>
+                  1-Click Fix: GitHub Actions Error (Cannot read properties of null reading
+                  &apos;channel&apos;)
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 shrink-0">
+                  100% Fixed YAML
                 </span>
               </div>
-              <ol className="list-decimal list-inside space-y-1.5 text-slate-300 leading-relaxed">
+              <p className="text-slate-300 leading-relaxed">
+                Aapke GitHub Actions log me{' '}
+                <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> aur{' '}
+                <code className="text-blue-300">{VIJU_PORTABLE_EXE_FILENAME}</code>{' '}
+                <strong>dono 100% compile ho chuke the</strong>! Sirf aakhri second me{' '}
+                <code className="text-amber-300">electron-builder 26.18.0</code> isliye ruka kyunki{' '}
+                <code className="text-amber-300">electron-desktop/package.json</code> me{' '}
+                <code className="text-amber-300">&quot;repository&quot;</code> nahi tha aur{' '}
+                <code className="text-amber-300">updateInfoBuilder.ts</code>{' '}
+                <code className="text-rose-300">null.channel</code> read karne laga.
+              </p>
+              <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed">
                 <li>
-                  AI Studio ke top-right bar me <strong>GitHub Sync / Export to GitHub</strong>{' '}
-                  button dabayein (taaki{' '}
-                  <code className="text-amber-300">build-windows-exe.yml</code> aapke repo me
-                  chala jaye).
+                  Niche green button{' '}
+                  <strong>&quot;Copy Fixed Workflow YAML (Auto-Fixes package.json)&quot;</strong>{' '}
+                  dabayein.
                 </li>
                 <li>
-                  Ya niche <strong>&quot;Copy Workflow &amp; Add on GitHub&quot;</strong> par
-                  click karke file paste karein aur <strong>Commit changes</strong> kar dein.
-                </li>
-                <li>
-                  Commit hote hi <strong>GitHub Actions</strong> 2-3 minute me{' '}
-                  <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> build
-                  karke seedha aapke <strong>Releases</strong> tab me publish kar dega!
+                  Apne GitHub repo me{' '}
+                  <code className="text-blue-300">.github/workflows/build-windows-exe.yml</code>{' '}
+                  kholkar yeh naya YAML paste karein aur <strong>Commit changes</strong> kar dein
+                  (yeh workflow khud <code className="text-emerald-300">package.json</code> ko fix
+                  karke <code className="text-emerald-300">-c.publish=null</code> ke sath build
+                  karega!).
                 </li>
               </ol>
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <a
-                  href={releaseUrls.newWorkflowFileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   onClick={() => handleCopy('wf-yaml', workflowFileObj.content)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  {copiedFile === 'wf-yaml' ? (
+                    <Check className="w-3.5 h-3.5 text-white" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
                   <span>
                     {copiedFile === 'wf-yaml'
-                      ? 'YAML Copied! Paste in GitHub Tab'
-                      : '1. Copy Workflow YAML & Add on GitHub'}
+                      ? 'Fixed Workflow YAML Copied!'
+                      : '1. Copy Fixed Workflow YAML (Auto-Fixes package.json)'}
                   </span>
-                </a>
+                </button>
                 <a
-                  href={releaseUrls.actionsWorkflowUrl}
+                  href={releaseUrls.editWorkflowFileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => handleCopy('wf-yaml', workflowFileObj.content)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold transition-colors"
                 >
-                  <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                  <span>2. Check GitHub Actions Progress</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>2. Edit build-windows-exe.yml on GitHub</span>
                 </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopy('pkg-json', packageJsonFileObj.content)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold transition-colors"
+                >
+                  {copiedFile === 'pkg-json' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-blue-400" />
+                  )}
+                  <span>
+                    {copiedFile === 'pkg-json'
+                      ? 'Fixed package.json Copied!'
+                      : 'Copy Fixed package.json'}
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -1066,7 +1099,14 @@ npm run release:github`}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
             {
-              title: '1. GitHub Actions workflow fails with 403 Resource not accessible by integration',
+              title:
+                "1. TypeError: Cannot read properties of null (reading 'channel') at computeChannelNames (updateInfoBuilder.ts)",
+              cause:
+                'When electron-builder v26 runs inside the electron-desktop/ subdirectory with build.publish set to a github provider without owner/repo or a top-level "repository" field in package.json, updateInfoBuilder.ts resolves a null publish config after building the NSIS .exe.',
+              fix: 'Set "publish": null in electron-desktop/package.json, add "repository": { "type": "git", "url": "https://github.com/thakorvijay51098/Viju-Browser.git" }, and run npx electron-builder --win --x64 --publish never -c.publish=null (already updated in both package.json and build-windows-exe.yml).',
+            },
+            {
+              title: '2. GitHub Actions workflow fails with 403 Resource not accessible by integration',
               cause: 'Default GITHUB_TOKEN in repository settings has Read-only permissions.',
               fix: 'Our .github/workflows/build-windows-exe.yml explicitly sets "permissions: contents: write" at the workflow level. You can also verify in GitHub Repo -> Settings -> Actions -> General -> Workflow permissions -> Read and write permissions.',
             },

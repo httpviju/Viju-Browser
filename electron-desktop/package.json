@@ -7,9 +7,13 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
-    "pack": "electron-builder --dir",
-    "dist:win": "electron-builder --win --x64 --publish never",
+    "pack": "electron-builder --dir -c.publish=null",
+    "dist:win": "electron-builder --win --x64 --publish never -c.publish=null",
     "release:github": "electron-builder --win --x64 --publish always"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thakorvijay51098/Viju-Browser.git"
   },
   "keywords": [
     "browser",
@@ -31,12 +35,7 @@
     "directories": {
       "output": "dist-installer"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "releaseType": "release"
-      }
-    ],
+    "publish": null,
     "files": [
       "main.js",
       "preload.js",

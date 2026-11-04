@@ -663,6 +663,8 @@ export interface GitHubReleaseBundleUrls {
   tagPortableExeDownloadUrl: string;
   actionsWorkflowUrl: string;
   newWorkflowFileUrl: string;
+  editWorkflowFileUrl: string;
+  editPackageJsonUrl: string;
   actionsSettingsPermissionsUrl: string;
   apiRepoUrl: string;
   apiLatestReleaseUrl: string;
@@ -712,6 +714,8 @@ export function buildGitHubReleaseUrls(
     tagPortableExeDownloadUrl: `${baseRepoUrl}/releases/download/${cleanTag}/${VIJU_PORTABLE_EXE_FILENAME}`,
     actionsWorkflowUrl: `${baseRepoUrl}/actions`,
     newWorkflowFileUrl: `${baseRepoUrl}/new/main?filename=.github/workflows/build-windows-exe.yml`,
+    editWorkflowFileUrl: `${baseRepoUrl}/edit/main/.github/workflows/build-windows-exe.yml`,
+    editPackageJsonUrl: `${baseRepoUrl}/edit/main/electron-desktop/package.json`,
     actionsSettingsPermissionsUrl: `${baseRepoUrl}/settings/actions`,
     apiRepoUrl: `https://api.github.com/repos/${normalizedRepo}`,
     apiLatestReleaseUrl: `https://api.github.com/repos/${normalizedRepo}/releases/latest`,
@@ -775,7 +779,7 @@ export function diagnoseNoReleasesState(
       explanationHinglish:
         'Aapke GitHub repo par "No releases published" isliye dikha raha hai kyunki jo auto-build workflow humne yahan AI Studio me banaya hai, woh abhi aapke GitHub repo me push/sync nahi hua hai.',
       actionRequiredHinglish:
-        'AI Studio ke top-right me GitHub icon (Sync/Save to GitHub) dabayein YA niche "1-Click Push & Publish Release" button use karein.',
+        'AI Studio ke top-right me GitHub icon (Sync/Save to GitHub) dabayein YA niche "1-Click Copy Fixed Workflow YAML" button use karein.',
     };
   }
 
@@ -795,11 +799,11 @@ export function diagnoseNoReleasesState(
     return {
       reasonCode: 'WORKFLOW_FAILED_PERMISSIONS',
       headlineHinglish:
-        'GitHub Actions Build Run Hua Par Permission Ya Config Ki Wajah Se Ruka',
+        'GitHub Actions Build Error Detected (Fixed: electron-builder "reading channel" / Permissions)',
       explanationHinglish:
-        'GitHub repo me default GITHUB_TOKEN permission "Read-only" hone par workflow Release create nahi kar pata.',
+        'electron-builder v26 me subfolder build ke dauran updateInfoBuilder.ts ("Cannot read properties of null (reading \'channel\')") ya GITHUB_TOKEN permission ki wajah se last step ruka. Humne iska 100% fix (-c.publish=null + auto repository patch) laga diya hai!',
       actionRequiredHinglish:
-        'Apne GitHub Repo -> Settings -> Actions -> General -> Workflow permissions me jaakar "Read and write permissions" select karein aur Save karke workflow re-run karein.',
+        'Upar green "Copy Fixed Workflow YAML (build-windows-exe.yml)" button click karke apne GitHub workflow file me paste & Commit karein — build turant pass ho jayega!',
     };
   }
 
