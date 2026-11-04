@@ -50,6 +50,7 @@ import {
   isDomainWhitelistedForWebRTC,
   syncPolicyFromShieldFlags,
   buildGitHubReleaseUrls,
+  diagnoseNoReleasesState,
   DEFAULT_GITHUB_RELEASE_REPO,
   VIJU_INSTALLER_EXE_FILENAME,
   VIJU_PORTABLE_EXE_FILENAME,
@@ -659,6 +660,52 @@ test('buildGitHubReleaseUrls constructs direct GitHub Releases .EXE download lin
     fromFullUrl.installerExeDownloadUrl,
     `https://github.com/customuser/viju-desktop-browser/releases/latest/download/${VIJU_INSTALLER_EXE_FILENAME}`
   );
+  assert.equal(
+    fromFullUrl.newWorkflowFileUrl,
+    'https://github.com/customuser/viju-desktop-browser/new/main?filename=.github/workflows/build-windows-exe.yml'
+  );
 });
+
+test('diagnoseNoReleasesState accurately identifies why GitHub shows "No releases published"', () => {
+  // 1. Workflow file not pushed to GitHub repo yet
+  const notSynced = diagnoseNoReleasesState({
+    repoExists: true,
+    hasWorkflowFile: false,
+    latestRunStatus: 'none',
+    releasesCount: 0,
+  });
+  assert.equal(notSynced.reasonCode, 'WORKFLOW_NOT_PUSHED_YET');
+  assert.ok(notSynced.headlineHinglish.includes('build-windows-exe.yml'));
+
+  // 2. GitHub Actions currently building .EXE
+  const building = diagnoseNoReleasesState({
+    repoExists: true,
+    hasWorkflowFile: true,
+    latestRunStatus: 'in_progress',
+    releasesCount: 0,
+  });
+  assert.equal(building.reasonCode, 'BUILD_IN_PROGRESS');
+
+  // 3. GitHub Actions failed due to permissions
+  const failed = diagnoseNoReleasesState({
+    repoExists: true,
+    hasWorkflowFile: true,
+    latestRunStatus: 'completed',
+    latestRunConclusion: 'failure',
+    releasesCount: 0,
+  });
+  assert.equal(failed.reasonCode, 'WORKFLOW_FAILED_PERMISSIONS');
+
+  // 4. Release is live
+  const live = diagnoseNoReleasesState({
+    repoExists: true,
+    hasWorkflowFile: true,
+    latestRunStatus: 'completed',
+    latestRunConclusion: 'success',
+    releasesCount: 1,
+  });
+  assert.equal(live.reasonCode, 'RELEASE_LIVE');
+});
+
 
 

@@ -17,6 +17,9 @@ import {
 import { ELECTRON_SOURCE_FILES } from '../data/electronSourceFiles';
 import {
   buildGitHubReleaseUrls,
+  diagnoseNoReleasesState,
+  GitHubNoReleasesDiagnosisInput,
+  GitHubNoReleasesDiagnosisResult,
   DEFAULT_GITHUB_RELEASE_REPO,
   VIJU_INSTALLER_EXE_FILENAME,
   VIJU_PORTABLE_EXE_FILENAME,
@@ -41,6 +44,8 @@ interface LiveReleaseCheckState {
   htmlUrl?: string;
   assets?: LiveGitHubReleaseAsset[];
   message?: string;
+  diagnosisInput?: GitHubNoReleasesDiagnosisInput;
+  diagnosis?: GitHubNoReleasesDiagnosisResult;
 }
 
 const GITHUB_REPO_STORAGE_KEY = 'viju.githubReleaseRepo.v1';
@@ -81,6 +86,9 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
 
   const releaseUrls = buildGitHubReleaseUrls(repoInput, VIJU_RELEASE_TAG);
   const currentFile = ELECTRON_SOURCE_FILES[selectedFileIndex] || ELECTRON_SOURCE_FILES[0];
+  const workflowFileObj =
+    ELECTRON_SOURCE_FILES[workflowFileIndex] ||
+    ELECTRON_SOURCE_FILES[ELECTRON_SOURCE_FILES.length - 1];
 
   const handleCopy = (key: string, text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -98,50 +106,138 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadWindowsOneClickBuilderBat = () => {
+    const desktopFiles = ELECTRON_SOURCE_FILES.filter(
+      (f) => f.filename !== 'build-windows-exe.yml'
+    );
+    const psLines: string[] = [
+      '$ErrorActionPreference = "Stop"',
+      'Write-Host "==========================================================" -ForegroundColor Cyan',
+      'Write-Host "  VIJU BROWSER v1.4.0 - 1-CLICK WINDOWS .EXE AUTO-BUILDER " -ForegroundColor Green',
+      'Write-Host "==========================================================" -ForegroundColor Cyan',
+      '$targetDir = Join-Path $PSScriptRoot "viju-browser-win32"',
+      'New-Item -ItemType Directory -Force -Path $targetDir | Out-Null',
+    ];
+
+    for (const file of desktopFiles) {
+      const b64 = btoa(unescape(encodeURIComponent(file.content)));
+      psLines.push(
+        `[IO.File]::WriteAllText((Join-Path $targetDir "${file.filename}"), [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("${b64}")))`
+      );
+      psLines.push(`Write-Host "  [+] Extracted ${file.filename}" -ForegroundColor Gray`);
+    }
+
+    psLines.push(
+      'Set-Location $targetDir',
+      'Write-Host ""',
+      'Write-Host "[1/2] Installing Electron 35 & electron-builder..." -ForegroundColor Yellow',
+      'npm install --no-audit --no-fund',
+      'Write-Host "[2/2] Building Viju-Browser-Setup-1.4.0-x64.exe & Portable .EXE..." -ForegroundColor Yellow',
+      '$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"',
+      'npx electron-builder --win --x64 --publish never',
+      'Write-Host ""',
+      'Write-Host "SUCCESS! Opening dist-installer folder with your .EXE files..." -ForegroundColor Green',
+      'Invoke-Item (Join-Path $targetDir "dist-installer")'
+    );
+
+    const batContent = [
+      '@echo off',
+      'title Viju Browser v1.4.0 - 1-Click Windows .EXE Builder',
+      'echo Starting Viju Browser Windows .EXE Auto-Builder...',
+      'powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
+        psLines.join('; ').replace(/"/g, '\\"') +
+        '"',
+      'pause',
+      '',
+    ].join('\r\n');
+
+    handleDownloadSingleFile('Build-Viju-Browser-EXE.bat', batContent);
+    onTriggerInstallerDownload(
+      'Build-Viju-Browser-EXE.bat',
+      'local://Build-Viju-Browser-EXE.bat',
+      batContent.length
+    );
+  };
+
   const handleCheckLiveGitHubRelease = async () => {
     setLiveReleaseState({ status: 'checking' });
+    const headers = { Accept: 'application/vnd.github+json' };
     try {
-      const response = await fetch(releaseUrls.apiLatestReleaseUrl, {
-        headers: { Accept: 'application/vnd.github+json' },
-      });
-      if (response.status === 404) {
+      const [repoRes, wfRes, runsRes, relRes] = await Promise.all([
+        fetch(releaseUrls.apiRepoUrl, { headers }).catch(() => null),
+        fetch(releaseUrls.apiWorkflowFileUrl, { headers }).catch(() => null),
+        fetch(releaseUrls.apiActionRunsUrl, { headers }).catch(() => null),
+        fetch(releaseUrls.apiLatestReleaseUrl, { headers }).catch(() => null),
+      ]);
+
+      const repoExists = Boolean(repoRes && repoRes.ok);
+      const hasWorkflowFile = Boolean(wfRes && wfRes.ok);
+
+      let latestRunStatus: 'queued' | 'in_progress' | 'completed' | 'none' = 'none';
+      let latestRunConclusion: 'success' | 'failure' | 'cancelled' | 'skipped' | null = null;
+
+      if (runsRes && runsRes.ok) {
+        const runsData = await runsRes.json().catch(() => null);
+        const firstRun =
+          runsData && Array.isArray(runsData.workflow_runs) ? runsData.workflow_runs[0] : null;
+        if (firstRun) {
+          latestRunStatus = firstRun.status || 'none';
+          latestRunConclusion = firstRun.conclusion || null;
+        }
+      }
+
+      if (relRes && relRes.ok) {
+        const data = await relRes.json();
+        const assets: LiveGitHubReleaseAsset[] = Array.isArray(data.assets)
+          ? data.assets.map((a: LiveGitHubReleaseAsset) => ({
+              name: a.name,
+              size: a.size,
+              browser_download_url: a.browser_download_url,
+              download_count: a.download_count,
+            }))
+          : [];
+        const diagnosisInput: GitHubNoReleasesDiagnosisInput = {
+          repoExists: true,
+          hasWorkflowFile,
+          latestRunStatus,
+          latestRunConclusion,
+          releasesCount: 1,
+        };
         setLiveReleaseState({
-          status: 'not_published_yet',
-          message: `Repository "${releaseUrls.normalizedRepo}" par abhi latest release publish nahi hua hai. Niche diye 3 steps follow karke code GitHub par push karein — GitHub Actions automatically .EXE build karke Releases tab me daal dega!`,
+          status: 'found',
+          tagName: data.tag_name || VIJU_RELEASE_TAG,
+          publishedAt: data.published_at
+            ? new Date(data.published_at).toLocaleString()
+            : 'Just now',
+          htmlUrl: data.html_url || releaseUrls.releasesPageUrl,
+          assets,
+          diagnosisInput,
+          diagnosis: diagnoseNoReleasesState(diagnosisInput),
+          message: `Live GitHub Release (${data.tag_name || VIJU_RELEASE_TAG}) found with ${assets.length} downloadable asset(s)!`,
         });
         return;
       }
-      if (!response.ok) {
-        setLiveReleaseState({
-          status: 'error',
-          message: `GitHub API returned HTTP ${response.status} for ${releaseUrls.normalizedRepo}.`,
-        });
-        return;
-      }
-      const data = await response.json();
-      const assets: LiveGitHubReleaseAsset[] = Array.isArray(data.assets)
-        ? data.assets.map((a: LiveGitHubReleaseAsset) => ({
-            name: a.name,
-            size: a.size,
-            browser_download_url: a.browser_download_url,
-            download_count: a.download_count,
-          }))
-        : [];
+
+      const diagnosisInput: GitHubNoReleasesDiagnosisInput = {
+        repoExists,
+        hasWorkflowFile,
+        latestRunStatus,
+        latestRunConclusion,
+        releasesCount: 0,
+      };
+      const diagnosis = diagnoseNoReleasesState(diagnosisInput);
+
       setLiveReleaseState({
-        status: 'found',
-        tagName: data.tag_name || VIJU_RELEASE_TAG,
-        publishedAt: data.published_at
-          ? new Date(data.published_at).toLocaleString()
-          : 'Just now',
-        htmlUrl: data.html_url || releaseUrls.releasesPageUrl,
-        assets,
-        message: `Live GitHub Release (${data.tag_name || VIJU_RELEASE_TAG}) found with ${assets.length} downloadable asset(s)!`,
+        status: 'not_published_yet',
+        diagnosisInput,
+        diagnosis,
+        message: `${diagnosis.headlineHinglish} — ${diagnosis.explanationHinglish}`,
       });
     } catch {
       setLiveReleaseState({
         status: 'error',
         message:
-          'Could not reach api.github.com right now. Use the direct GitHub Releases .EXE links below.',
+          'Could not reach api.github.com right now. Use the Fix steps or 1-Click .BAT Builder below.',
       });
     }
   };
@@ -168,11 +264,12 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
               <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> (Full
               Installer) ya{' '}
               <code className="text-blue-300">{VIJU_PORTABLE_EXE_FILENAME}</code> (Portable
-              No-Install) direct download karein. Is project me{' '}
-              <code className="text-amber-300">.github/workflows/build-windows-exe.yml</code>{' '}
-              already configured hai jo har push par automatically Windows{' '}
-              <code className="text-emerald-300">.exe</code> build karke GitHub Releases tab me
-              publish kar deta hai.
+              No-Install) direct download karein. Agar GitHub par abhi{' '}
+              <strong className="text-amber-300">&quot;No releases published&quot;</strong> dikha
+              raha hai, toh niche diye{' '}
+              <strong className="text-emerald-300">2-Minute Fix</strong> ya{' '}
+              <strong className="text-blue-300">1-Click Windows .BAT Builder</strong> ka use
+              karein!
             </p>
           </div>
 
@@ -222,15 +319,15 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
                 type="button"
                 onClick={handleCheckLiveGitHubRelease}
                 disabled={liveReleaseState.status === 'checking'}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors shrink-0"
-                title="Check if latest .EXE release is live on this GitHub repository"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition-colors shrink-0"
+                title="Diagnose why GitHub shows 'No releases published' or check if .EXE is ready"
               >
                 <RefreshCw
-                  className={`w-3.5 h-3.5 text-blue-400 ${
+                  className={`w-3.5 h-3.5 ${
                     liveReleaseState.status === 'checking' ? 'animate-spin' : ''
                   }`}
                 />
-                <span>Check Release</span>
+                <span>Diagnose / Check Release</span>
               </button>
             </div>
             <div className="text-[11px] font-mono text-slate-400 truncate">
@@ -347,10 +444,120 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
           </div>
         </div>
 
-        {/* Live GitHub Release Check Banner */}
+        {/* Dedicated "Why does GitHub say 'No releases published'?" Solution Box */}
+        <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/40 space-y-3.5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                GitHub Par &quot;Releases / No releases published&quot; Kyun Dikha Raha Hai? (Aur
+                2 Minute Me Fix Kaise Karein)
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-amber-200/90 bg-amber-950/60 px-2.5 py-0.5 rounded border border-amber-500/30">
+              AI Studio Workspace → GitHub Sync Required
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-200 leading-relaxed">
+            Jab tak AI Studio ka naya code (jisme{' '}
+            <code className="text-amber-300">.github/workflows/build-windows-exe.yml</code> aur{' '}
+            <code className="text-amber-300">electron-desktop/</code> folder hai) aapke GitHub
+            repository (<code className="text-blue-300">{releaseUrls.normalizedRepo}</code>) par
+            push/sync nahi hota, tab tak GitHub ka Releases tab{' '}
+            <strong className="text-white">&quot;No releases published&quot;</strong> dikhata hai.
+            Aap niche diye <strong>2 tariko</strong> me se kisi bhi 1 se abhi turant{' '}
+            <code className="text-emerald-300">.EXE</code> pa sakte hain:
+          </p>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+            {/* Method A: Publish on GitHub Releases in 2 Clicks */}
+            <div className="p-3.5 rounded-lg bg-[#090D16] border border-slate-800 space-y-2.5">
+              <div className="font-bold text-emerald-400 flex items-center justify-between">
+                <span>Tarika 1: GitHub Releases Tab Me .EXE Publish Karein (2-3 Min)</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300">
+                  GitHub Cloud Build
+                </span>
+              </div>
+              <ol className="list-decimal list-inside space-y-1.5 text-slate-300 leading-relaxed">
+                <li>
+                  AI Studio ke top-right bar me <strong>GitHub Sync / Export to GitHub</strong>{' '}
+                  button dabayein (taaki{' '}
+                  <code className="text-amber-300">build-windows-exe.yml</code> aapke repo me
+                  chala jaye).
+                </li>
+                <li>
+                  Ya niche <strong>&quot;Copy Workflow &amp; Add on GitHub&quot;</strong> par
+                  click karke file paste karein aur <strong>Commit changes</strong> kar dein.
+                </li>
+                <li>
+                  Commit hote hi <strong>GitHub Actions</strong> 2-3 minute me{' '}
+                  <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> build
+                  karke seedha aapke <strong>Releases</strong> tab me publish kar dega!
+                </li>
+              </ol>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <a
+                  href={releaseUrls.newWorkflowFileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleCopy('wf-yaml', workflowFileObj.content)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>
+                    {copiedFile === 'wf-yaml'
+                      ? 'YAML Copied! Paste in GitHub Tab'
+                      : '1. Copy Workflow YAML & Add on GitHub'}
+                  </span>
+                </a>
+                <a
+                  href={releaseUrls.actionsWorkflowUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold transition-colors"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                  <span>2. Check GitHub Actions Progress</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Method B: Instant 1-Click Local Windows .BAT Builder (Zero GitHub Wait) */}
+            <div className="p-3.5 rounded-lg bg-[#090D16] border border-blue-500/40 space-y-2.5 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="font-bold text-blue-400 flex items-center justify-between">
+                  <span>Tarika 2: Bina GitHub Wait Kiye Abhi PC Par .EXE Banayein</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950 text-blue-300">
+                    Instant 1-Click .BAT
+                  </span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Agar aap GitHub sync ka wait nahi karna chahte, toh niche diye button se{' '}
+                  <code className="text-blue-300">Build-Viju-Browser-EXE.bat</code> abhi download
+                  karein. Isko apne Windows PC par double-click karte hi yeh saari 8 Electron
+                  files extract karke{' '}
+                  <code className="text-emerald-300">{VIJU_INSTALLER_EXE_FILENAME}</code> aur{' '}
+                  <code className="text-blue-300">{VIJU_PORTABLE_EXE_FILENAME}</code> banakar
+                  folder open kar dega!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadWindowsOneClickBuilderBat}
+                className="w-full flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download 1-Click Windows .EXE Builder (Build-Viju-Browser-EXE.bat)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Live GitHub Release Check & Diagnostic Banner */}
         {liveReleaseState.status !== 'idle' && (
           <div
-            className={`p-3.5 rounded-lg border text-xs flex flex-col gap-2 ${
+            className={`p-4 rounded-lg border text-xs flex flex-col gap-3 ${
               liveReleaseState.status === 'found'
                 ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
                 : liveReleaseState.status === 'not_published_yet'
@@ -367,7 +574,9 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
                 )}
                 <span>
                   {liveReleaseState.status === 'checking'
-                    ? `Checking https://api.github.com/repos/${releaseUrls.normalizedRepo}/releases/latest...`
+                    ? `Diagnosing GitHub repository ${releaseUrls.normalizedRepo} (Repo, Workflow, Actions & Releases)...`
+                    : liveReleaseState.diagnosis
+                    ? liveReleaseState.diagnosis.headlineHinglish
                     : liveReleaseState.message}
                 </span>
               </div>
@@ -382,6 +591,67 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
                 </a>
               )}
             </div>
+
+            {liveReleaseState.diagnosis && liveReleaseState. diagnosisInput && (
+              <div className="space-y-2">
+                <p className="text-slate-200 leading-relaxed">
+                  {liveReleaseState.diagnosis.explanationHinglish}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px]">
+                  <div className="p-2 rounded bg-[#090D16] border border-slate-800">
+                    <span className="text-slate-400 block">1. GitHub Repo:</span>
+                    <span
+                      className={
+                        liveReleaseState.diagnosisInput.repoExists
+                          ? 'text-emerald-400 font-bold'
+                          : 'text-amber-400 font-bold'
+                      }
+                    >
+                      {liveReleaseState.diagnosisInput.repoExists
+                        ? 'FOUND (PUBLIC)'
+                        : 'NOT FOUND / PRIVATE'}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded bg-[#090D16] border border-slate-800">
+                    <span className="text-slate-400 block">2. Workflow (.yml):</span>
+                    <span
+                      className={
+                        liveReleaseState.diagnosisInput.hasWorkflowFile
+                          ? 'text-emerald-400 font-bold'
+                          : 'text-amber-400 font-bold'
+                      }
+                    >
+                      {liveReleaseState.diagnosisInput.hasWorkflowFile
+                        ? 'SYNCED ON GITHUB'
+                        : 'NOT PUSHED YET'}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded bg-[#090D16] border border-slate-800">
+                    <span className="text-slate-400 block">3. Actions Build:</span>
+                    <span className="text-blue-300 font-bold uppercase">
+                      {liveReleaseState.diagnosisInput.latestRunStatus}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded bg-[#090D16] border border-slate-800">
+                    <span className="text-slate-400 block">4. Releases Tab:</span>
+                    <span
+                      className={
+                        liveReleaseState.diagnosisInput.releasesCount > 0
+                          ? 'text-emerald-400 font-bold'
+                          : 'text-amber-400 font-bold'
+                      }
+                    >
+                      {liveReleaseState.diagnosisInput.releasesCount > 0
+                        ? 'PUBLISHED (.EXE READY)'
+                        : 'NO RELEASES YET'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-emerald-300 font-semibold pt-1">
+                  Next Step: {liveReleaseState.diagnosis.actionRequiredHinglish}
+                </div>
+              </div>
+            )}
 
             {liveReleaseState.assets && liveReleaseState.assets.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 pt-1">

@@ -662,7 +662,13 @@ export interface GitHubReleaseBundleUrls {
   tagInstallerExeDownloadUrl: string;
   tagPortableExeDownloadUrl: string;
   actionsWorkflowUrl: string;
+  newWorkflowFileUrl: string;
+  actionsSettingsPermissionsUrl: string;
+  apiRepoUrl: string;
   apiLatestReleaseUrl: string;
+  apiReleasesListUrl: string;
+  apiWorkflowFileUrl: string;
+  apiActionRunsUrl: string;
 }
 
 export function buildGitHubReleaseUrls(
@@ -705,7 +711,106 @@ export function buildGitHubReleaseUrls(
     tagInstallerExeDownloadUrl: `${baseRepoUrl}/releases/download/${cleanTag}/${VIJU_INSTALLER_EXE_FILENAME}`,
     tagPortableExeDownloadUrl: `${baseRepoUrl}/releases/download/${cleanTag}/${VIJU_PORTABLE_EXE_FILENAME}`,
     actionsWorkflowUrl: `${baseRepoUrl}/actions`,
+    newWorkflowFileUrl: `${baseRepoUrl}/new/main?filename=.github/workflows/build-windows-exe.yml`,
+    actionsSettingsPermissionsUrl: `${baseRepoUrl}/settings/actions`,
+    apiRepoUrl: `https://api.github.com/repos/${normalizedRepo}`,
     apiLatestReleaseUrl: `https://api.github.com/repos/${normalizedRepo}/releases/latest`,
+    apiReleasesListUrl: `https://api.github.com/repos/${normalizedRepo}/releases`,
+    apiWorkflowFileUrl: `https://api.github.com/repos/${normalizedRepo}/contents/.github/workflows/build-windows-exe.yml`,
+    apiActionRunsUrl: `https://api.github.com/repos/${normalizedRepo}/actions/runs?per_page=5`,
   };
 }
+
+export interface GitHubNoReleasesDiagnosisInput {
+  repoExists: boolean;
+  hasWorkflowFile: boolean;
+  latestRunStatus: 'queued' | 'in_progress' | 'completed' | 'none';
+  latestRunConclusion?: 'success' | 'failure' | 'cancelled' | 'skipped' | null;
+  releasesCount: number;
+}
+
+export interface GitHubNoReleasesDiagnosisResult {
+  reasonCode:
+    | 'RELEASE_LIVE'
+    | 'REPO_NOT_FOUND_OR_PRIVATE'
+    | 'WORKFLOW_NOT_PUSHED_YET'
+    | 'BUILD_IN_PROGRESS'
+    | 'WORKFLOW_FAILED_PERMISSIONS'
+    | 'WORKFLOW_NOT_TRIGGERED_YET';
+  headlineHinglish: string;
+  explanationHinglish: string;
+  actionRequiredHinglish: string;
+}
+
+export function diagnoseNoReleasesState(
+  input: GitHubNoReleasesDiagnosisInput
+): GitHubNoReleasesDiagnosisResult {
+  if (input.releasesCount > 0) {
+    return {
+      reasonCode: 'RELEASE_LIVE',
+      headlineHinglish: 'Release Published Hai! Direct .EXE Download Ready',
+      explanationHinglish:
+        'Aapke GitHub repository ke Releases tab me .EXE release publish ho chuka hai.',
+      actionRequiredHinglish:
+        'Upar diye green "Direct Download Setup .EXE" button par click karke download karein.',
+    };
+  }
+
+  if (!input.repoExists) {
+    return {
+      reasonCode: 'REPO_NOT_FOUND_OR_PRIVATE',
+      headlineHinglish: 'GitHub Repository Publicly Nahi Mila Ya Private Hai',
+      explanationHinglish:
+        'GitHub par yeh repository abhi create nahi hua hai ya Private mode me hai, isliye Releases tab khali hai.',
+      actionRequiredHinglish:
+        'AI Studio ke top bar se "Export / Sync to GitHub" click karein ya niche 1-Click Auto-Push Token tool use karein.',
+    };
+  }
+
+  if (!input.hasWorkflowFile) {
+    return {
+      reasonCode: 'WORKFLOW_NOT_PUSHED_YET',
+      headlineHinglish:
+        'Reason Found: Naya Code (.github/workflows/build-windows-exe.yml) Abhi GitHub Par Sync Nahi Hua Hai!',
+      explanationHinglish:
+        'Aapke GitHub repo par "No releases published" isliye dikha raha hai kyunki jo auto-build workflow humne yahan AI Studio me banaya hai, woh abhi aapke GitHub repo me push/sync nahi hua hai.',
+      actionRequiredHinglish:
+        'AI Studio ke top-right me GitHub icon (Sync/Save to GitHub) dabayein YA niche "1-Click Push & Publish Release" button use karein.',
+    };
+  }
+
+  if (input.latestRunStatus === 'in_progress' || input.latestRunStatus === 'queued') {
+    return {
+      reasonCode: 'BUILD_IN_PROGRESS',
+      headlineHinglish:
+        'GitHub Actions Abhi Windows .EXE Build Kar Raha Hai (Wait 2-3 Minutes)!',
+      explanationHinglish:
+        'Workflow push ho chuka hai aur GitHub ka Windows server abhi Viju-Browser-Setup-1.4.0-x64.exe compile kar raha hai. Jab tak build complete nahi hota tab tak "No releases published" dikhta hai.',
+      actionRequiredHinglish:
+        '2-3 minute wait karein aur phir "Diagnose / Check Release" button dabayein — Release automatically aa jayega!',
+    };
+  }
+
+  if (input.latestRunStatus === 'completed' && input.latestRunConclusion === 'failure') {
+    return {
+      reasonCode: 'WORKFLOW_FAILED_PERMISSIONS',
+      headlineHinglish:
+        'GitHub Actions Build Run Hua Par Permission Ya Config Ki Wajah Se Ruka',
+      explanationHinglish:
+        'GitHub repo me default GITHUB_TOKEN permission "Read-only" hone par workflow Release create nahi kar pata.',
+      actionRequiredHinglish:
+        'Apne GitHub Repo -> Settings -> Actions -> General -> Workflow permissions me jaakar "Read and write permissions" select karein aur Save karke workflow re-run karein.',
+    };
+  }
+
+  return {
+    reasonCode: 'WORKFLOW_NOT_TRIGGERED_YET',
+    headlineHinglish: 'Workflow File Maujood Hai — Bas 1 Click Me "Run workflow" Trigger Karein',
+    explanationHinglish:
+      'Aapke repo me workflow file hai lekin abhi tak release build trigger nahi hua hai.',
+    actionRequiredHinglish:
+      'GitHub Actions tab kholkar "Build & Publish Windows .EXE" -> "Run workflow" par click karein.',
+  };
+}
+
 
