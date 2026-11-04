@@ -7,8 +7,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
-    "pack": "electron-builder --dir -c.publish=null",
-    "dist:win": "electron-builder --win --x64 --publish never -c.publish=null",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win --x64 --publish never",
     "release:github": "electron-builder --win --x64 --publish always"
   },
   "repository": {
@@ -35,7 +35,15 @@
     "directories": {
       "output": "dist-installer"
     },
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "thakorvijay51098",
+        "repo": "Viju-Browser",
+        "releaseType": "release",
+        "channel": "latest"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",

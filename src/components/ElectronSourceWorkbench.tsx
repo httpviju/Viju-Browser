@@ -136,7 +136,7 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
       'npm install --no-audit --no-fund',
       'Write-Host "[2/2] Building Viju-Browser-Setup-1.4.0-x64.exe & Portable .EXE..." -ForegroundColor Yellow',
       '$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"',
-      'npx electron-builder --win --x64 --publish never -c.publish=null',
+      'npx electron-builder --win --x64 --publish never',
       'Write-Host ""',
       'Write-Host "SUCCESS! Opening dist-installer folder with your .EXE files..." -ForegroundColor Green',
       'Invoke-Item (Join-Path $targetDir "dist-installer")'
@@ -505,9 +505,10 @@ export const ElectronSourceWorkbench: React.FC<ElectronSourceWorkbenchProps> = (
                   Apne GitHub repo me{' '}
                   <code className="text-blue-300">.github/workflows/build-windows-exe.yml</code>{' '}
                   kholkar yeh naya YAML paste karein aur <strong>Commit changes</strong> kar dein
-                  (yeh workflow khud <code className="text-emerald-300">package.json</code> ko fix
-                  karke <code className="text-emerald-300">-c.publish=null</code> ke sath build
-                  karega!).
+                  (yeh workflow PowerShell-safe hai aur khud{' '}
+                  <code className="text-emerald-300">package.json</code> me{' '}
+                  <code className="text-emerald-300">owner/repo/channel</code> set karke bina kisi
+                  error ke build karega!).
                 </li>
               </ol>
               <div className="flex flex-wrap items-center gap-2 pt-1">

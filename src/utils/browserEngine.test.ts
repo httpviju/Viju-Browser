@@ -707,7 +707,7 @@ test('diagnoseNoReleasesState accurately identifies why GitHub shows "No release
   assert.equal(live.reasonCode, 'RELEASE_LIVE');
 });
 
-test('Electron package.json and GitHub workflow prevent electron-builder updateInfoBuilder null channel crash', async () => {
+test('Electron package.json and GitHub workflow prevent electron-builder updateInfoBuilder null channel and PowerShell -c.publish=null errors', async () => {
   const { ELECTRON_SOURCE_FILES } = await import('../data/electronSourceFiles');
   const pkgFile = ELECTRON_SOURCE_FILES.find((f) => f.filename === 'package.json');
   assert.ok(pkgFile, 'Expected package.json in ELECTRON_SOURCE_FILES');
@@ -716,14 +716,20 @@ test('Electron package.json and GitHub workflow prevent electron-builder updateI
   // Must define top-level repository so electron-builder never warns "Cannot detect repository by .git/config"
   assert.ok(parsedPkg.repository && parsedPkg.repository.url.includes('github.com'));
 
-  // Must set build.publish to null because softprops/action-gh-release publishes the .exe artifacts directly
-  assert.equal(parsedPkg.build.publish, null);
-  assert.ok(parsedPkg.scripts['dist:win'].includes('-c.publish=null'));
+  // Must define explicit owner, repo, and channel so updateInfoBuilder never resolves null.channel
+  assert.ok(Array.isArray(parsedPkg.build.publish));
+  assert.equal(parsedPkg.build.publish[0].provider, 'github');
+  assert.ok(parsedPkg.build.publish[0].owner);
+  assert.ok(parsedPkg.build.publish[0].repo);
+  assert.equal(parsedPkg.build.publish[0].channel, 'latest');
+
+  // Must NOT use -c.publish=null which PowerShell splits on '.' into '-c .publish=null'
+  assert.ok(!parsedPkg.scripts['dist:win'].includes('-c.publish=null'));
 
   const wfFile = ELECTRON_SOURCE_FILES.find((f) => f.filename === 'build-windows-exe.yml');
   assert.ok(wfFile, 'Expected build-windows-exe.yml in ELECTRON_SOURCE_FILES');
-  assert.ok(wfFile.content.includes('-c.publish=null'));
-  assert.ok(wfFile.content.includes('p.build.publish=null'));
+  assert.ok(!wfFile.content.includes('-c.publish=null'));
+  assert.ok(wfFile.content.includes("channel:'latest'"));
 });
 
 

@@ -37,8 +37,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GITHUB_REPOSITORY_SLUG: ${{ github.repository }}
         run: |
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const repo=process.env.GITHUB_REPOSITORY_SLUG||'thakorvijay51098/Viju-Browser';p.repository={type:'git',url:'https://github.com/'+repo+'.git'};if(p.build){p.build.publish=null;}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
-          npx electron-builder --win --x64 --publish never -c.publish=null
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const slug=process.env.GITHUB_REPOSITORY_SLUG||'thakorvijay51098/Viju-Browser';const parts=slug.split('/');const owner=parts[0]||'thakorvijay51098';const repo=parts[1]||'Viju-Browser';p.repository={type:'git',url:'https://github.com/'+owner+'/'+repo+'.git'};p.build=p.build||{};p.build.publish=[{provider:'github',owner:owner,repo:repo,releaseType:'release',channel:'latest'}];fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          npx electron-builder --win --x64 --publish never
 
       - name: 5. Upload .EXE Build Artifacts to Workflow Summary
         uses: actions/upload-artifact@v4
