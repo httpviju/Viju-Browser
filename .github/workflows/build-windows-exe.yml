@@ -49,26 +49,21 @@ jobs:
           if-no-files-found: error
 
       - name: 6. Publish Direct .EXE Files to GitHub Releases Tab
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.4.0
-          name: "Viju Browser v1.4.0 — Windows 64-Bit (.EXE Direct Download)"
-          body: |
-            ## Viju Browser v1.4.0 (Windows 10 / 11 x64)
-            Security-hardened custom Chromium + Electron desktop browser with all privacy protections ON by default:
-            - **WebRTC Shield:** All 7 controls ON (`Enable WebRTC Shield`, `Block Local IP`, `Block Public IP`, `Block UDP`, `Force Proxy`, `Leak Detection`, `Whitelist`).
-            - **Maximum 12-Surface Fingerprint Spoofing:** Canvas, WebGL, Audio, Font, ClientRects, WebRTC, Navigator, Timezone, Random, No-Cache, Whitelist, Logs — all ON by default.
-            - **Random User-Agent Switcher:** Global switcher, auto-rotation, startup rotation, and JS `navigator` protection ON.
-            - **Clear Browsing Data:** All 9 Web Data + 4 Browser Data checkboxes checked by default.
-            - **Auto Refresh Plus:** Multi-tab independent timers (minimum 5s).
-
-            ### Direct Windows `.EXE` Downloads (Below in Assets)
-            1. **`Viju-Browser-Setup-1.4.0-x64.exe`** — Full Windows NSIS Installer (creates Desktop & Start Menu shortcuts).
-            2. **`Viju-Browser-Portable-1.4.0-x64.exe`** — Standalone Portable `.EXE` (run directly without installation).
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            electron-desktop/dist-installer/*.exe
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f v1.4.0 "${{ github.sha }}"
+          git push origin v1.4.0 --force
+          if gh release view v1.4.0 >/dev/null 2>&1; then
+            gh release upload v1.4.0 electron-desktop/dist-installer/*.exe --clobber
+          else
+            gh release create v1.4.0 electron-desktop/dist-installer/*.exe \
+              --target "${{ github.sha }}" \
+              --title "Viju Browser v1.4.0 — Windows 64-Bit (.EXE Direct Download)" \
+              --notes "Direct Windows 64-bit NSIS Installer (Viju-Browser-Setup-1.4.0-x64.exe) and Standalone Portable Executable (Viju-Browser-Portable-1.4.0-x64.exe) with WebRTC Shield, 12-Surface Fingerprint Spoofing, and Random User-Agent Switcher ON by default." \
+              --latest
+          fi
+

@@ -730,6 +730,10 @@ test('Electron package.json and GitHub workflow prevent electron-builder updateI
   assert.ok(wfFile, 'Expected build-windows-exe.yml in ELECTRON_SOURCE_FILES');
   assert.ok(!wfFile.content.includes('-c.publish=null'));
   assert.ok(wfFile.content.includes("channel:'latest'"));
+  // Must use official gh release CLI with explicit git tag push instead of softprops/action-gh-release (which causes HTTP 500/502 on refs/heads/main)
+  assert.ok(!wfFile.content.includes('softprops/action-gh-release'));
+  assert.ok(wfFile.content.includes('git tag -f v1.4.0'));
+  assert.ok(wfFile.content.includes('gh release create v1.4.0'));
 });
 
 
